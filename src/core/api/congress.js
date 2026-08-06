@@ -3,8 +3,7 @@
  */
 import apiClient from './client';
 
-// const BASE = 'https://laravel.stomkomcg.me';
-const BASE = 'http://localhost:8000';
+const BASE = 'https://api.stomkomcg.me';
 
 export const congressApi = {
   getList: () => apiClient.get('/congress'),

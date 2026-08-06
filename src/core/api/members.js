@@ -5,7 +5,7 @@
 import apiClient from './client';
 
 export const membersApi = {
-  getList: () => apiClient.get('/member'),
+  getList: () => apiClient.get('/member', { params: { all: 1 } }),
   getById: (id) => apiClient.get(`/member/${id}`),
   create: (data) => apiClient.post('/member', data),
   update: (id, data) => {

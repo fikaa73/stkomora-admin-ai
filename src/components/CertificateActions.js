@@ -80,8 +80,14 @@ export default function CertificateActions({
     }
   };
 
-  const displayTitle = fileRecord.title?.trim() || fileRecord.file?.split('/').pop() || `Sertifikat #${fileRecord.id}`;
+  const hasFile = !!fileRecord.file;
+  const displayTitle =
+    fileRecord.event_name?.trim() ||
+    fileRecord.title?.trim() ||
+    fileRecord.file?.split('/').pop() ||
+    `Sertifikat #${fileRecord.id}`;
   const fileName = fileRecord.file?.split('/').pop() || 'dokument';
+  const points = fileRecord.points != null && fileRecord.points !== '' ? fileRecord.points : null;
 
   return (
     <div
@@ -94,9 +100,14 @@ export default function CertificateActions({
         boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
       }}
     >
-      <div style={{ fontWeight: 600, fontSize: 14, color: '#262626', marginBottom: 8, lineHeight: 1.4 }}>
+      <div style={{ fontWeight: 600, fontSize: 14, color: '#262626', marginBottom: 4, lineHeight: 1.4 }}>
         {displayTitle}
       </div>
+      {points != null && (
+        <div style={{ fontSize: 12, color: '#0a3851', fontWeight: 600, marginBottom: 8 }}>
+          Broj bodova: {points}
+        </div>
+      )}
       <div
         style={{
           display: 'flex',
@@ -107,36 +118,42 @@ export default function CertificateActions({
         }}
       >
         <span style={{ fontSize: 12, color: '#8c8c8c' }} title={fileName}>
-          Fajl: {fileName}
+          {hasFile ? `Fajl: ${fileName}` : 'Evidencija bez sertifikata'}
         </span>
         <Space size="small" wrap>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={handleView}
-            loading={loading === 'view'}
-          >
-            Pregled
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<DownloadOutlined />}
-            onClick={handleDownload}
-            loading={loading === 'download'}
-          >
-            Preuzmi
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<PrinterOutlined />}
-            onClick={handlePrint}
-            loading={loading === 'print'}
-          >
-            Štampaj
-          </Button>
+          {hasFile && (
+            <Button
+              type="link"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={handleView}
+              loading={loading === 'view'}
+            >
+              Pregled
+            </Button>
+          )}
+          {hasFile && (
+            <Button
+              type="link"
+              size="small"
+              icon={<DownloadOutlined />}
+              onClick={handleDownload}
+              loading={loading === 'download'}
+            >
+              Preuzmi
+            </Button>
+          )}
+          {hasFile && (
+            <Button
+              type="link"
+              size="small"
+              icon={<PrinterOutlined />}
+              onClick={handlePrint}
+              loading={loading === 'print'}
+            >
+              Štampaj
+            </Button>
+          )}
           {showRemove && (
             <Popconfirm
               title="Obriši sertifikat?"

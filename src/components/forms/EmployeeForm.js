@@ -19,6 +19,7 @@ export default function EmployeeForm({
   existingContracts = [],
   onContractAdded,
   onContractRemoved,
+  onPersonalIdRemoved,
   addContractLoading,
 }) {
   const normFile = (e) => {
@@ -51,6 +52,9 @@ export default function EmployeeForm({
       <Form.Item name="date_of_birth" label="Datum rođenja">
         <DatePicker format="DD.MM.YYYY" style={{ width: '100%' }} placeholder="Datum rođenja" />
       </Form.Item>
+      <Form.Item name="workplace" label="Radno mjesto">
+        <Input placeholder="npr. Referent, Administrator, Higijeničar..." />
+      </Form.Item>
       <Form.Item
         name="personal_id"
         label="Lična karta / pasoš (PDF ili slika)"
@@ -63,6 +67,8 @@ export default function EmployeeForm({
               employeeId={editingEmployeeId}
               field="personal_id"
               filePath={existingPersonalId}
+              showRemove
+              onRemoved={onPersonalIdRemoved}
             />
           )
         }

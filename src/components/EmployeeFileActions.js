@@ -2,14 +2,27 @@
  * View, Download, Print buttons for employee files (personal_id, contract).
  */
 import React, { useState } from 'react';
-import { Button, Space, message } from 'antd';
-import { EyeOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
+import { Button, Space, message, Popconfirm } from 'antd';
+import { EyeOutlined, DownloadOutlined, PrinterOutlined, DeleteOutlined } from '@ant-design/icons';
 import { employeesApi } from '../core/api/employees';
 
-export default function EmployeeFileActions({ employeeId, field, filePath, label }) {
+export default function EmployeeFileActions({ employeeId, field, filePath, label, showRemove = false, onRemoved }) {
   const [loading, setLoading] = useState(null);
 
   if (!filePath || !employeeId) return null;
+
+  const handleRemove = async () => {
+    setLoading('remove');
+    try {
+      await employeesApi.deleteFile(employeeId, field);
+      message.success('Fajl je obrisan');
+      onRemoved?.();
+    } catch (e) {
+      message.error(e?.message || 'Greška pri brisanju');
+    } finally {
+      setLoading(null);
+    }
+  };
 
   const handleView = async () => {
     setLoading('view');
@@ -93,6 +106,24 @@ export default function EmployeeFileActions({ employeeId, field, filePath, label
       >
         Štampaj
       </Button>
+      {showRemove && (
+        <Popconfirm
+          title="Obriši fajl?"
+          onConfirm={handleRemove}
+          okText="Da"
+          cancelText="Ne"
+        >
+          <Button
+            type="link"
+            size="small"
+            danger
+            icon={<DeleteOutlined />}
+            loading={loading === 'remove'}
+          >
+            Obriši
+          </Button>
+        </Popconfirm>
+      )}
     </Space>
   );
 }

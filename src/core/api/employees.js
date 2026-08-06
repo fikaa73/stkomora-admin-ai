@@ -70,6 +70,7 @@ export const employeesApi = {
     return apiClient.put(`/employees/${id}`, data);
   },
   delete: (id) => apiClient.delete(`/employees/${id}`),
+  deleteFile: (id, field) => apiClient.delete(`/employees/${id}/file/${field}`),
   addContract: (id, file) => {
     const formData = new FormData();
     formData.append('contract', file);

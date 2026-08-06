@@ -3,7 +3,7 @@
  * Each file has an optional title field.
  */
 import React from 'react';
-import { Form, Select, Upload, Button, message, Input } from 'antd';
+import { Form, Select, Upload, Button, message, Input, InputNumber } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import CertificateActions from '../CertificateActions';
 
@@ -46,6 +46,27 @@ export default function CertificateForm({
         />
       </Form.Item>
 
+      {!editingCertificateId && (
+        <>
+          <Form.Item
+            name="event_name"
+            label="Naziv skupa"
+            rules={[{ required: true, message: 'Unesite naziv skupa' }]}
+          >
+            <Input placeholder="npr. Simpozijum stomatologa 2026" />
+          </Form.Item>
+
+          <Form.Item name="points" label="Broj bodova skupa">
+            <InputNumber
+              min={0}
+              step={0.5}
+              style={{ width: '100%' }}
+              placeholder="npr. 10"
+            />
+          </Form.Item>
+        </>
+      )}
+
       {editingCertificateId && existingFiles?.length > 0 && (
         <Form.Item label="Postojeći sertifikati">
           <div style={{ marginBottom: 16 }}>
@@ -70,14 +91,14 @@ export default function CertificateForm({
 
       <Form.Item
         name="certificates"
-        label="Sertifikati"
+        label={editingCertificateId ? 'Sertifikati' : 'Sertifikat (opciono)'}
         valuePropName="fileList"
         getValueFromEvent={normMultipleFiles}
         getValueProps={(v) => (Array.isArray(v) ? { fileList: v } : { fileList: [] })}
         extra={
           editingCertificateId
             ? 'Dodajte novi sertifikat (naslov iznad).'
-            : 'Možete izabrati više fajlova. Za svaki fajl unesite naslov ispod.'
+            : 'Opciono — ako imate sertifikat, priložite ga. Skup se može evidentirati i bez fajla.'
         }
       >
         <Upload

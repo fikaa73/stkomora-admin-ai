@@ -18,8 +18,8 @@ import {
   useDeleteFinance,
   useMemberFinanceDetails,
 } from '../../hooks/useFinances';
-import { useMembers } from '../../hooks/useMembers';
 import FinanceForm from '../../components/forms/FinanceForm';
+import ExemptionSection from '../../components/finances/ExemptionSection';
 
 const { Search } = Input;
 const { Text } = Typography;
@@ -27,6 +27,16 @@ const { Text } = Typography;
 function fmtMoney(v) {
   const n = Number(v);
   return isNaN(n) ? '0.00' : n.toFixed(2);
+}
+
+/* Broj(evi) licence člana – iz relacije licenses ili legacy licence stringa. */
+function licenseOf(user) {
+  if (!user) return '';
+  const rel = Array.isArray(user.licenses)
+    ? user.licenses.map((l) => l?.license_number || l?.licence).filter(Boolean)
+    : [];
+  if (rel.length) return [...new Set(rel)].join(', ');
+  return user.licence || user.license_number || '';
 }
 
 function normalizeSearchValue(value) {
@@ -75,13 +85,19 @@ const PDF_RIGHT_MARGIN_MM = 14;
 const PDF_APPROVAL_LINE_WIDTH_MM = 35;
 const PDF_CHAMBER_TITLE = 'Stomatološka komora Crne Gore';
 
+/* Match Ant Design danger / success used in the details drawer */
+const PDF_COLOR_DEBT_RGB = [207, 19, 34];
+const PDF_COLOR_CREDIT_RGB = [56, 158, 13];
+const PDF_COLOR_DEBT_BANNER_FILL = [255, 242, 240];
+const PDF_COLOR_CREDIT_BANNER_FILL = [246, 255, 237];
+const PDF_COLOR_NEUTRAL_BANNER_FILL = [250, 250, 250];
+
 async function getPdfLogoDataUrl() {
   for (const url of [PDF_LOGO_URL, PDF_LOGO_URL_JPG]) {
     try {
       const res = await fetch(url);
       if (!res.ok) continue;
       const blob = await res.blob();
-      const mime = blob.type || (url.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
@@ -147,12 +163,28 @@ function MemberDetailsContent({ memberId, memberName = '' }) {
       doc.text(dateStr, PDF_LOGO_LEFT_MM, subtitleY + 7);
       doc.setTextColor(0, 0, 0);
       const tableStartY = subtitleY + 14;
-      const tableData = (data.records || []).map((r) => [
-        r.date ? dayjs(r.date).format('DD.MM.YYYY') : '–',
-        (r.description || '–').substring(0, 50),
-        fmtMoney(r.duguje),
-        fmtMoney(r.potrazuje),
-      ]);
+      const tableData = (data.records || []).map((r) => {
+        const d = Number(r.duguje);
+        const p = Number(r.potrazuje);
+        return [
+          r.date ? dayjs(r.date).format('DD.MM.YYYY') : '–',
+          (r.description || '–').substring(0, 50),
+          {
+            content: fmtMoney(r.duguje),
+            styles: {
+              halign: 'right',
+              textColor: d > 0 ? PDF_COLOR_DEBT_RGB : [0, 0, 0],
+            },
+          },
+          {
+            content: fmtMoney(r.potrazuje),
+            styles: {
+              halign: 'right',
+              textColor: p > 0 ? PDF_COLOR_CREDIT_RGB : [0, 0, 0],
+            },
+          },
+        ];
+      });
       autoTable(doc, {
         head: [[
           { content: 'Datum' },
@@ -166,13 +198,37 @@ function MemberDetailsContent({ memberId, memberName = '' }) {
         columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } },
       });
       const finalY = doc.lastAutoTable?.finalY ?? tableStartY;
+      const totalNum = Number(data.total);
+      const bannerTop = finalY + 4;
+      const bannerH = 11;
+      const bannerW = PDF_PAGE_WIDTH_MM - PDF_LOGO_LEFT_MM - PDF_RIGHT_MARGIN_MM;
+      if (totalNum > 0) {
+        doc.setFillColor(...PDF_COLOR_DEBT_BANNER_FILL);
+        doc.setDrawColor(255, 204, 199);
+      } else if (totalNum < 0) {
+        doc.setFillColor(...PDF_COLOR_CREDIT_BANNER_FILL);
+        doc.setDrawColor(183, 235, 143);
+      } else {
+        doc.setFillColor(...PDF_COLOR_NEUTRAL_BANNER_FILL);
+        doc.setDrawColor(240, 240, 240);
+      }
+      doc.rect(PDF_LOGO_LEFT_MM, bannerTop, bannerW, bannerH, 'FD');
       doc.setFontSize(11);
+      if (fontOk) doc.setFont('DejaVuSans', 'normal');
+      if (totalNum > 0) {
+        doc.setTextColor(...PDF_COLOR_DEBT_RGB);
+      } else if (totalNum < 0) {
+        doc.setTextColor(...PDF_COLOR_CREDIT_RGB);
+      } else {
+        doc.setTextColor(0, 0, 0);
+      }
       doc.text(
         `Ukupno: ${fmtMoney(data.total)} €`,
         PDF_PAGE_WIDTH_MM - PDF_RIGHT_MARGIN_MM,
-        finalY + 12,
+        bannerTop + bannerH - 3,
         { align: 'right' }
       );
+      doc.setTextColor(0, 0, 0);
       const approvalY = PDF_PAGE_HEIGHT_MM - 48;
       const lineY = approvalY + 6;
       const rightX = PDF_PAGE_WIDTH_MM - PDF_RIGHT_MARGIN_MM;
@@ -193,12 +249,25 @@ function MemberDetailsContent({ memberId, memberName = '' }) {
     const title = `Finansijska kartica – ${memberName || 'Član'}`;
     const thead = '<tr><th>Datum</th><th>Opis</th><th style="text-align:right">Duguje</th><th style="text-align:right">Potražuje</th></tr>';
     const tbody = (data.records || [])
-      .map(
-        (r) =>
-          `<tr><td>${r.date ? dayjs(r.date).format('DD.MM.YYYY') : '–'}</td><td>${(r.description || '–').replace(/</g, '&lt;')}</td><td style="text-align:right">${fmtMoney(r.duguje)}</td><td style="text-align:right">${fmtMoney(r.potrazuje)}</td></tr>`
-      )
+      .map((r) => {
+        const d = Number(r.duguje);
+        const p = Number(r.potrazuje);
+        const dStyle = d > 0 ? 'color:#cf1322;font-weight:600' : '';
+        const pStyle = p > 0 ? 'color:#389e0d;font-weight:600' : '';
+        return `<tr><td>${r.date ? dayjs(r.date).format('DD.MM.YYYY') : '–'}</td><td>${(r.description || '–').replace(/</g, '&lt;')}</td><td style="text-align:right;${dStyle}">${fmtMoney(r.duguje)}</td><td style="text-align:right;${pStyle}">${fmtMoney(r.potrazuje)}</td></tr>`;
+      })
       .join('');
     const total = fmtMoney(data.total);
+    const totalNum = Number(data.total);
+    let totalBoxStyle =
+      'margin-top:12px;padding:12px 16px;border-radius:8px;text-align:right;font-weight:600;font-size:15px;';
+    if (totalNum > 0) {
+      totalBoxStyle += 'background:#fff2f0;border:1px solid #ffccc7;color:#cf1322;';
+    } else if (totalNum < 0) {
+      totalBoxStyle += 'background:#f6ffed;border:1px solid #b7eb8f;color:#389e0d;';
+    } else {
+      totalBoxStyle += 'background:#fafafa;border:1px solid #f0f0f0;';
+    }
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
     const logoUrl = `${window.location.origin}${process.env.PUBLIC_URL || ''}/logo.png`;
@@ -211,10 +280,9 @@ function MemberDetailsContent({ memberId, memberName = '' }) {
         .pdf-header{display:flex;align-items:center;gap:20px;margin-bottom:20px} .pdf-header .logo{width:80px;height:80px;object-fit:contain;flex-shrink:0} .pdf-header .chamber-title{font-size:1.1rem;font-weight:600;color:#262626;margin:0;line-height:1.3}
         .subtitle{font-size:1.25rem;margin:0 0 6px 0;font-weight:600} .doc-date{font-size:0.95rem;color:#555;margin:0 0 14px 0;letter-spacing:0.02em}
         table{width:100%;border-collapse:collapse} th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:14px} th{background:#fafafa;font-weight:600}
-        .total{margin-top:12px;padding:12px 16px;background:#fafafa;border:1px solid #f0f0f0;border-radius:8px;text-align:right;font-weight:600;font-size:15px}
         .approval{margin-top:160px;text-align:right} .approval .label{font-size:0.95rem;margin-bottom:6px} .approval .line{border-bottom:1px solid #333;width:140px;margin-left:auto;margin-top:4px;height:1.2em}
       </style>
-      </head><body><div class="pdf-header"><img src="${logoUrl}" class="logo" alt="" onerror="this.style.display='none'"><p class="chamber-title">${chamberTitle}</p></div><h2 class="subtitle">${title}</h2><p class="doc-date">${dayjs().format('DD.MM.YYYY')}</p><table><thead>${thead}</thead><tbody>${tbody}</tbody></table><div class="total">Ukupno: ${total} €</div><div class="approval"><div class="label">Odobrio</div><div class="line">&nbsp;</div></div></body></html>
+      </head><body><div class="pdf-header"><img src="${logoUrl}" class="logo" alt="" onerror="this.style.display='none'"><p class="chamber-title">${chamberTitle}</p></div><h2 class="subtitle">${title}</h2><p class="doc-date">${dayjs().format('DD.MM.YYYY')}</p><table><thead>${thead}</thead><tbody>${tbody}</tbody></table><div style="${totalBoxStyle}">Ukupno: ${total} €</div><div class="approval"><div class="label">Odobrio</div><div class="line">&nbsp;</div></div></body></html>
     `);
     printWindow.document.close();
     printWindow.focus();
@@ -273,6 +341,7 @@ function MemberDetailsContent({ memberId, memberName = '' }) {
 
   return (
     <>
+      <ExemptionSection memberId={memberId} />
       <div
         style={{
           display: 'flex',
@@ -416,6 +485,7 @@ export default function FinanceListPage() {
         const fullNameReverse = normalizeSearchValue(`${user?.surname || ''} ${user?.name || ''}`);
         const description = normalizeSearchValue(f.description);
         const updatedByName = normalizeSearchValue(f.updated_by_name);
+        const licence = normalizeSearchValue(licenseOf(user));
 
         return (
           name.includes(normalizedSearchText) ||
@@ -423,7 +493,8 @@ export default function FinanceListPage() {
           fullName.includes(normalizedSearchText) ||
           fullNameReverse.includes(normalizedSearchText) ||
           description.includes(normalizedSearchText) ||
-          updatedByName.includes(normalizedSearchText)
+          updatedByName.includes(normalizedSearchText) ||
+          licence.includes(normalizedSearchText)
         );
       });
     }
@@ -509,6 +580,13 @@ export default function FinanceListPage() {
         const user = r.user || r.member; // Support both user (new) and member (legacy)
         return user ? `${user.name || ''} ${user.surname || ''}`.trim() : '–';
       },
+    },
+    {
+      title: 'Br. licence',
+      key: 'licence',
+      width: 120,
+      ellipsis: true,
+      render: (_, r) => licenseOf(r.user || r.member) || '–',
     },
     {
       title: 'Opis',

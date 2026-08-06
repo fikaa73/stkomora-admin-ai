@@ -16,7 +16,7 @@ import {
   Form,
   Tooltip,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined } from '@ant-design/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMembers } from '../../hooks/useMembers';
 import {
@@ -27,6 +27,7 @@ import {
   useDeleteCertificate,
 } from '../../hooks/useCertificates';
 import CertificateForm from '../../components/forms/CertificateForm';
+import BulkCertificatesModal from '../../components/forms/BulkCertificatesModal';
 
 const { Search } = Input;
 const { Text } = Typography;
@@ -40,6 +41,7 @@ export default function CertificateListPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState('add');
   const [editingId, setEditingId] = useState(null);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [form] = Form.useForm();
 
   const { data: editingItem, isLoading: loadingItem, refetch } = useCertificate(editingId);
@@ -54,6 +56,11 @@ export default function CertificateListPage() {
         label: `${m.name || ''} ${m.surname || ''}${m.email ? ` (${m.email})` : ''}`.trim() || `ID ${m.id}`,
       })),
     [members]
+  );
+
+  const userIdsWithCertificate = useMemo(
+    () => new Set((certificates || []).map((c) => c.user_id).filter(Boolean)),
+    [certificates]
   );
 
   useEffect(() => {
@@ -140,12 +147,19 @@ export default function CertificateListPage() {
           message.error('Izaberite člana');
           return;
         }
-        if (files.length === 0) {
-          message.error('Dodajte bar jedan sertifikat');
+        const eventName = (values.event_name || '').trim();
+        if (!eventName && files.length === 0) {
+          message.error('Unesite naziv skupa ili dodajte sertifikat');
           return;
         }
-        await addCertificateMutation.mutateAsync({ user_id: userId, files, titles });
-        message.success('Sertifikati su dodati');
+        await addCertificateMutation.mutateAsync({
+          user_id: userId,
+          files,
+          titles,
+          event_name: eventName,
+          points: values.points,
+        });
+        message.success('Skup je evidentiran');
         closeDrawer();
       } else {
         message.success('Podaci su ažurirani');
@@ -201,6 +215,15 @@ export default function CertificateListPage() {
       key: 'files',
       width: 100,
       render: (_, record) => record.files?.length ?? 0,
+    },
+    {
+      title: 'Broj bodova',
+      key: 'points',
+      width: 110,
+      render: (_, record) => {
+        const total = (record.files || []).reduce((sum, f) => sum + (Number(f.points) || 0), 0);
+        return Math.round(total * 100) / 100;
+      },
     },
     {
       title: 'Akcije',
@@ -285,6 +308,9 @@ export default function CertificateListPage() {
             <Button type="primary" icon={<PlusOutlined />} onClick={openAddDrawer}>
               Dodaj sertifikate
             </Button>
+            <Button icon={<TeamOutlined />} onClick={() => setBulkModalOpen(true)}>
+              Grupni unos
+            </Button>
           </Space>
         </div>
       </div>
@@ -332,6 +358,12 @@ export default function CertificateListPage() {
       >
         {drawerContent}
       </Drawer>
+      <BulkCertificatesModal
+        open={bulkModalOpen}
+        onCancel={() => setBulkModalOpen(false)}
+        members={members}
+        userIdsWithCertificate={userIdsWithCertificate}
+      />
     </div>
   );
 }

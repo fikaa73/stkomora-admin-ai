@@ -3,7 +3,7 @@
  * Image upload: shown only in form sidebar; not in list.
  */
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { Form, Input, Select, Button, Space, DatePicker, Upload, Avatar } from 'antd';
+import { Form, Input, Select, Button, Space, DatePicker, Upload, Avatar, Switch, Divider } from 'antd';
 import { PlusOutlined, UserOutlined, CameraOutlined } from '@ant-design/icons';
 import { useCities } from '../../hooks/useMembers';
 import { useCompanies } from '../../hooks/useCompanies';
@@ -175,6 +175,32 @@ export default function MemberForm({
       <Form.Item name="phone" label="Telefon" rules={[{ required: true }, { min: 9, message: 'Min. 9 cifara' }]}>
         <Input placeholder="Broj telefona" />
       </Form.Item>
+
+      <Divider orientation="left" style={{ marginTop: 8 }}>Status člana</Divider>
+      <Form.Item
+        name="is_active_member"
+        label="Aktivan član"
+        valuePropName="checked"
+        initialValue={true}
+        extra="Neaktivni članovi se ne prikazuju na sajtu, ali ostaju u evidenciji."
+      >
+        <Switch checkedChildren="Aktivan" unCheckedChildren="Neaktivan" />
+      </Form.Item>
+      <Form.Item noStyle shouldUpdate={(prev, curr) => prev.is_active_member !== curr.is_active_member}>
+        {({ getFieldValue }) =>
+          getFieldValue('is_active_member') === false ? (
+            <>
+              <Form.Item name="inactive_date" label="Datum (npr. preminuo dana)">
+                <DatePicker format="DD.MM.YYYY" placeholder="Izaberite datum" style={{ width: '100%' }} />
+              </Form.Item>
+              <Form.Item name="inactive_reason" label="Obrazloženje">
+                <Input.TextArea rows={2} placeholder="npr. Preminuo" maxLength={512} />
+              </Form.Item>
+            </>
+          ) : null
+        }
+      </Form.Item>
+
       <Form.Item style={{ marginBottom: 0 }}>
         <Button type="primary" htmlType="submit" loading={loading} style={{ marginRight: 8 }}>
           {submitLabel}

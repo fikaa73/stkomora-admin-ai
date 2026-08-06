@@ -233,7 +233,13 @@ function MemberDetailsPanel({ memberId }) {
             <Typography.Title level={4} style={{ margin: 0 }}>{fullName}</Typography.Title>
             <Typography.Text type="secondary">{member.email || 'Bez email adrese'}</Typography.Text>
             <div style={{ marginTop: 8 }}>
+              <Tag color={member.is_active_member === false ? 'red' : 'green'}>
+                {member.is_active_member === false ? 'Neaktivan član' : 'Aktivan član'}
+              </Tag>
               <Tag color={statusColor}>{member.status || 'status nije definisan'}</Tag>
+              <Tag color={member.is_exempt_now ? 'orange' : 'green'}>
+                {member.is_exempt_now ? 'Oslobođen članarine' : 'Plaća članarinu'}
+              </Tag>
               <Tag color="blue">{member.primaryCompany?.name ?? member.company ?? 'Bez ordinacije'}</Tag>
             </div>
           </div>
@@ -275,6 +281,14 @@ function MemberDetailsPanel({ memberId }) {
           <Descriptions.Item label="Status">{member.status ?? '–'}</Descriptions.Item>
           <Descriptions.Item label="Grad">{member.city?.name ?? member.city ?? '–'}</Descriptions.Item>
           <Descriptions.Item label="Ordinacija">{member.primaryCompany?.name ?? member.company ?? '–'}</Descriptions.Item>
+          <Descriptions.Item label="Status člana">
+            {member.is_active_member === false
+              ? `Neaktivan${member.inactive_date ? ' — ' + dayjs(member.inactive_date).format('DD.MM.YYYY') : ''}`
+              : 'Aktivan'}
+          </Descriptions.Item>
+          {member.is_active_member === false && member.inactive_reason ? (
+            <Descriptions.Item label="Obrazloženje" span={2}>{member.inactive_reason}</Descriptions.Item>
+          ) : null}
         </Descriptions>
       </div>
 
@@ -348,6 +362,8 @@ export default function MemberListPage() {
   const updateMember = useUpdateMember();
   const [searchText, setSearchText] = useState('');
   const [companyFilter, setCompanyFilter] = useState('all');
+  const [feeFilter, setFeeFilter] = useState('all'); // 'all' | 'liable' | 'exempt'
+  const [statusFilter, setStatusFilter] = useState('active'); // 'all' | 'active' | 'inactive'
   const [deleteModal, setDeleteModal] = useState({ visible: false, member: null });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState('add'); // 'add' | 'edit'
@@ -385,6 +401,9 @@ export default function MemberListPage() {
       faximil: editingMember.fax_nbr ?? editingMember.faximil,
       email: editingMember.email,
       phone: editingMember.phone,
+      is_active_member: editingMember.is_active_member ?? true,
+      inactive_date: editingMember.inactive_date ? dayjs(editingMember.inactive_date) : null,
+      inactive_reason: editingMember.inactive_reason,
     });
   }, [editingMember, drawerMode, form]);
 
@@ -420,6 +439,16 @@ export default function MemberListPage() {
         (m) => (m.company_id === companyFilter || m.primaryCompany?.id === companyFilter)
       );
     }
+    if (statusFilter === 'active') {
+      result = result.filter((m) => m.is_active_member !== false);
+    } else if (statusFilter === 'inactive') {
+      result = result.filter((m) => m.is_active_member === false);
+    }
+    if (feeFilter === 'liable') {
+      result = result.filter((m) => !m.is_exempt_now);
+    } else if (feeFilter === 'exempt') {
+      result = result.filter((m) => !!m.is_exempt_now);
+    }
     if (searchText.trim()) {
       const normalizedSearch = searchText.toLowerCase().trim();
       const searchParts = normalizedSearch.split(/\s+/).filter(Boolean);
@@ -443,7 +472,7 @@ export default function MemberListPage() {
       });
     }
     return result;
-  }, [members, searchText, companyFilter]);
+  }, [members, searchText, companyFilter, feeFilter, statusFilter]);
 
   const licenseNumbersByUserId = useMemo(() => {
     const map = new Map();
@@ -528,6 +557,13 @@ export default function MemberListPage() {
       const sexValue = typeof values.sex === 'number' ? values.sex : (values.sex?.value || values.sex || 1);
       const fileToUpload = imageFileFromForm ?? imageFileRef.current ?? imageFile;
 
+      const isActiveMember = values.is_active_member !== false;
+      const inactiveDate =
+        !isActiveMember && values.inactive_date
+          ? dayjs(values.inactive_date).format('YYYY-MM-DD')
+          : null;
+      const inactiveReason = !isActiveMember ? (values.inactive_reason?.trim() || null) : null;
+
       if (fileToUpload || (drawerMode === 'edit' && removeImage)) {
         const formData = new FormData();
         formData.append('name', values.name);
@@ -542,6 +578,9 @@ export default function MemberListPage() {
         if (values.company_id != null) formData.append('company_id', values.company_id);
         if (fileToUpload) formData.append('image', fileToUpload);
         if (removeImage) formData.append('remove_image', '1');
+        formData.append('is_active_member', isActiveMember ? '1' : '0');
+        if (inactiveDate) formData.append('inactive_date', inactiveDate);
+        if (inactiveReason) formData.append('inactive_reason', inactiveReason);
 
         if (drawerMode === 'add') {
           await addMember.mutateAsync(formData);
@@ -562,6 +601,9 @@ export default function MemberListPage() {
           email: values.email || null,
           city_id: values.city_id,
           company_id: values.company_id || null,
+          is_active_member: isActiveMember,
+          inactive_date: inactiveDate,
+          inactive_reason: inactiveReason,
         };
         if (drawerMode === 'add') {
           await addMember.mutateAsync(payload);
@@ -635,6 +677,41 @@ export default function MemberListPage() {
       width: 130,
       ellipsis: true,
       render: (_, record) => record.primaryCompany?.name ?? record.company ?? '–',
+    },
+    {
+      title: 'Status',
+      key: 'is_active_member',
+      width: 110,
+      render: (_, record) =>
+        record.is_active_member === false ? (
+          <Tooltip
+            title={
+              [
+                record.inactive_reason,
+                record.inactive_date ? dayjs(record.inactive_date).format('DD.MM.YYYY') : null,
+              ]
+                .filter(Boolean)
+                .join(' — ') || 'Neaktivan član'
+            }
+          >
+            <Tag color="red">Neaktivan</Tag>
+          </Tooltip>
+        ) : (
+          <Tag color="green">Aktivan</Tag>
+        ),
+    },
+    {
+      title: 'Članarina',
+      key: 'is_exempt_now',
+      width: 130,
+      render: (_, record) =>
+        record.is_exempt_now ? (
+          <Tooltip title={record.exemption_until ? `Oslobođen do ${dayjs(record.exemption_until + '-01').format('MM.YYYY')}` : 'Oslobođen plaćanja'}>
+            <Tag color="orange">Oslobođen</Tag>
+          </Tooltip>
+        ) : (
+          <Tag color="green">Plaća</Tag>
+        ),
     },
     {
       title: 'Akcije',
@@ -745,6 +822,26 @@ export default function MemberListPage() {
             optionFilterProp="label"
             placeholder="Ordinacija"
           />
+          <Select
+            value={statusFilter}
+            onChange={setStatusFilter}
+            style={{ width: 190, minWidth: 160 }}
+            options={[
+              { value: 'active', label: 'Aktivni članovi' },
+              { value: 'inactive', label: 'Neaktivni članovi' },
+              { value: 'all', label: 'Status: svi' },
+            ]}
+          />
+          <Select
+            value={feeFilter}
+            onChange={setFeeFilter}
+            style={{ width: 210, minWidth: 180 }}
+            options={[
+              { value: 'all', label: 'Članarina: svi' },
+              { value: 'liable', label: 'Aktivni (plaćaju)' },
+              { value: 'exempt', label: 'Neaktivni (oslobođeni)' },
+            ]}
+          />
           <Search
             placeholder="Pretraga..."
             allowClear
@@ -763,7 +860,7 @@ export default function MemberListPage() {
           columns={columns}
           dataSource={filteredMembers}
           loading={isLoading}
-          scroll={{ x: 860 }}
+          scroll={{ x: 1100 }}
           pagination={{
             pageSize: 15,
             showSizeChanger: true,

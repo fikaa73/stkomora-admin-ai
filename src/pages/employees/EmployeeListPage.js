@@ -41,6 +41,7 @@ export default function EmployeeListPage() {
       surname: editingItem.surname,
       email: editingItem.email,
       phone: editingItem.phone,
+      workplace: editingItem.workplace,
       date_of_birth: editingItem.date_of_birth ? dayjs(editingItem.date_of_birth) : null,
     });
   }, [editingItem, drawerMode, form]);
@@ -57,8 +58,13 @@ export default function EmployeeListPage() {
       const reversedFullName = `${surname} ${name}`.trim();
       const email = (e.email || '').toLowerCase();
       const jmbg = e.jmbg ? String(e.jmbg) : '';
+      const workplace = (e.workplace || '').toLowerCase();
 
-      if (email.includes(normalizedSearch) || jmbg.includes(normalizedSearch)) return true;
+      if (
+        email.includes(normalizedSearch) ||
+        jmbg.includes(normalizedSearch) ||
+        workplace.includes(normalizedSearch)
+      ) return true;
 
       if (searchParts.length === 1) {
         const term = searchParts[0];
@@ -116,6 +122,7 @@ export default function EmployeeListPage() {
         surname: values.surname,
         email: values.email,
         phone: values.phone || null,
+        workplace: values.workplace || null,
         date_of_birth: values.date_of_birth
           ? values.date_of_birth.format('YYYY-MM-DD')
           : null,
@@ -156,6 +163,14 @@ export default function EmployeeListPage() {
         ),
     },
     { title: 'Telefon', dataIndex: 'phone', key: 'phone', width: 115 },
+    {
+      title: 'Radno mjesto',
+      dataIndex: 'workplace',
+      key: 'workplace',
+      width: 150,
+      ellipsis: true,
+      render: (v) => v || '—',
+    },
     {
       title: 'Ugovori',
       key: 'contracts',
@@ -200,6 +215,7 @@ export default function EmployeeListPage() {
         existingContracts={editingItem?.contracts}
         onContractAdded={handleAddContract}
         onContractRemoved={() => refetch()}
+        onPersonalIdRemoved={() => refetch()}
         addContractLoading={addContractMutation?.isPending}
       />
     );
@@ -238,7 +254,7 @@ export default function EmployeeListPage() {
           columns={columns}
           dataSource={filteredEmployees}
           loading={isLoading}
-          scroll={{ x: 700 }}
+          scroll={{ x: 860 }}
           pagination={{
             pageSize: 15,
             showSizeChanger: true,
