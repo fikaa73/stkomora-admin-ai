@@ -17,7 +17,9 @@ import {
   useUpdateFinance,
   useDeleteFinance,
   useMemberFinanceDetails,
+  useFinanceProcessors,
 } from '../../hooks/useFinances';
+import { useMembers } from '../../hooks/useMembers';
 import FinanceForm from '../../components/forms/FinanceForm';
 import ExemptionSection from '../../components/finances/ExemptionSection';
 
@@ -37,13 +39,6 @@ function licenseOf(user) {
     : [];
   if (rel.length) return [...new Set(rel)].join(', ');
   return user.licence || user.license_number || '';
-}
-
-function normalizeSearchValue(value) {
-  return String(value || '')
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, ' ');
 }
 
 /* UTF-8 PDF font (same origin to avoid 403) – postinstall copies to public/fonts */
@@ -407,12 +402,15 @@ function MemberDetailsContent({ memberId, memberName = '' }) {
 
 /* ───── Main Page ───── */
 export default function FinanceListPage() {
-  const { data: finances = [], isLoading, error } = useFinances();
   const deleteFinance = useDeleteFinance();
   const addFinance = useAddFinance();
   const updateFinance = useUpdateFinance();
 
-  const [searchText, setSearchText] = useState('');
+  // Server-side paginacija + filteri
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(15);
+  const [searchInput, setSearchInput] = useState(''); // ono sto korisnik kuca
+  const [search, setSearch] = useState('');           // debounce-ovana vrijednost koja ide na server
   const [memberFilter, setMemberFilter] = useState('all');
   const [updatedByFilter, setUpdatedByFilter] = useState('all');
   const [deleteModal, setDeleteModal] = useState({ visible: false, item: null });
@@ -422,6 +420,32 @@ export default function FinanceListPage() {
   const [detailsMemberId, setDetailsMemberId] = useState(null);
   const [detailsMemberName, setDetailsMemberName] = useState('');
   const [form] = Form.useForm();
+
+  // Debounce pretrage (400ms); svaka promjena vraca na prvu stranu
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Parametri za /finances – uvijek sa page (server-side paginacija)
+  const queryParams = useMemo(() => {
+    const params = { page, per_page: perPage };
+    if (search) params.search = search;
+    if (memberFilter !== 'all') params.user_id = memberFilter;
+    if (updatedByFilter !== 'all') params.updated_by = updatedByFilter;
+    return params;
+  }, [page, perPage, search, memberFilter, updatedByFilter]);
+
+  const { data: financesResp, isLoading, isFetching, error } = useFinances(queryParams);
+  const finances = Array.isArray(financesResp?.data) ? financesResp.data : [];
+  const totalCount = financesResp?.total ?? finances.length;
+
+  // Opcije za dropdown: clanovi iz /member, obradjivaci iz /finances/processors
+  const { data: members = [] } = useMembers();
+  const { data: processors = [] } = useFinanceProcessors();
 
   const { data: editingItem, isLoading: loadingItem } = useFinance(editingId);
 
@@ -436,70 +460,23 @@ export default function FinanceListPage() {
     });
   }, [editingItem, drawerMode, form]);
 
-  /* Build member filter options */
   const memberFilterOptions = useMemo(() => {
-    const map = new Map();
-    finances.forEach((f) => {
-      const user = f.user || f.member; // Support both user (new) and member (legacy)
-      if (user?.id) {
-        map.set(user.id, `${user.name || ''} ${user.surname || ''}`.trim());
-      }
-    });
-    const sorted = [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-    return [
-      { value: 'all', label: 'Svi članovi' },
-      ...sorted.map(([id, name]) => ({ value: id, label: name })),
-    ];
-  }, [finances]);
+    const opts = (Array.isArray(members) ? members : [])
+      .map((m) => ({ value: m.id, label: `${m.name || ''} ${m.surname || ''}`.trim() }))
+      .filter((o) => o.value != null && o.label)
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return [{ value: 'all', label: 'Svi članovi' }, ...opts];
+  }, [members]);
 
   const updatedByFilterOptions = useMemo(() => {
-    const names = new Set();
-    finances.forEach((f) => {
-      if (f.updated_by_name) names.add(f.updated_by_name);
-    });
-    const sorted = [...names].sort((a, b) => a.localeCompare(b));
-    return [
-      { value: 'all', label: 'Svi obrađivači' },
-      ...sorted.map((name) => ({ value: name, label: name })),
-    ];
-  }, [finances]);
+    const opts = (Array.isArray(processors) ? processors : [])
+      .filter(Boolean)
+      .map((name) => ({ value: name, label: name }));
+    return [{ value: 'all', label: 'Svi obrađivači' }, ...opts];
+  }, [processors]);
 
-  const filteredFinances = useMemo(() => {
-    let result = finances;
-    if (memberFilter !== 'all') {
-      result = result.filter((f) => {
-        const userId = f.user_id ?? f.user?.id ?? f.member_id ?? f.member?.id;
-        return userId === memberFilter;
-      });
-    }
-    if (updatedByFilter !== 'all') {
-      result = result.filter((f) => f.updated_by_name === updatedByFilter);
-    }
-    const normalizedSearchText = normalizeSearchValue(searchText);
-    if (normalizedSearchText) {
-      result = result.filter((f) => {
-        const user = f.user || f.member; // Support both user (new) and member (legacy)
-        const name = normalizeSearchValue(user?.name);
-        const surname = normalizeSearchValue(user?.surname);
-        const fullName = normalizeSearchValue(`${user?.name || ''} ${user?.surname || ''}`);
-        const fullNameReverse = normalizeSearchValue(`${user?.surname || ''} ${user?.name || ''}`);
-        const description = normalizeSearchValue(f.description);
-        const updatedByName = normalizeSearchValue(f.updated_by_name);
-        const licence = normalizeSearchValue(licenseOf(user));
-
-        return (
-          name.includes(normalizedSearchText) ||
-          surname.includes(normalizedSearchText) ||
-          fullName.includes(normalizedSearchText) ||
-          fullNameReverse.includes(normalizedSearchText) ||
-          description.includes(normalizedSearchText) ||
-          updatedByName.includes(normalizedSearchText) ||
-          licence.includes(normalizedSearchText)
-        );
-      });
-    }
-    return result;
-  }, [finances, searchText, memberFilter, updatedByFilter]);
+  const onMemberFilterChange = (v) => { setMemberFilter(v); setPage(1); };
+  const onUpdatedByFilterChange = (v) => { setUpdatedByFilter(v); setPage(1); };
 
   const openAddDrawer = () => {
     setDrawerMode('add');
@@ -719,7 +696,7 @@ export default function FinanceListPage() {
         <Space wrap size="small">
           <Select
             value={memberFilter}
-            onChange={setMemberFilter}
+            onChange={onMemberFilterChange}
             style={{ width: 180 }}
             options={memberFilterOptions}
             showSearch
@@ -727,7 +704,7 @@ export default function FinanceListPage() {
           />
           <Select
             value={updatedByFilter}
-            onChange={setUpdatedByFilter}
+            onChange={onUpdatedByFilterChange}
             style={{ width: 180 }}
             options={updatedByFilterOptions}
             showSearch
@@ -736,8 +713,9 @@ export default function FinanceListPage() {
           <Search
             placeholder="Pretraga..."
             allowClear
-            onSearch={setSearchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onSearch={(v) => { setSearch(v.trim()); setPage(1); }}
             style={{ width: 220, minWidth: 160 }}
           />
           <Button type="primary" icon={<PlusOutlined />} onClick={openAddDrawer}>
@@ -748,13 +726,20 @@ export default function FinanceListPage() {
       <Table
         rowKey="id"
         columns={columns}
-        dataSource={filteredFinances}
-        loading={isLoading}
+        dataSource={finances}
+        loading={isLoading || isFetching}
         pagination={{
-          pageSize: 15,
+          current: page,
+          pageSize: perPage,
+          total: totalCount,
           showSizeChanger: true,
+          pageSizeOptions: [15, 25, 50, 100],
           showTotal: (t) => `Ukupno: ${t}`,
           size: 'default',
+        }}
+        onChange={(pag) => {
+          setPage(pag.current);
+          setPerPage(pag.pageSize);
         }}
         size="middle"
         locale={{ emptyText: error ? 'Greška pri učitavanju' : 'Nema stavki' }}

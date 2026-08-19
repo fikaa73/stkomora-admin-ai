@@ -1,17 +1,39 @@
 /**
  * React Query hooks for finances.
  */
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  keepPreviousData,
+} from '@tanstack/react-query';
 import { financesApi } from '../core/api/finances';
 
 const FINANCES_QUERY_KEY = ['finances'];
 
-export function useFinances() {
+/**
+ * Lista finansija. Sa server-side paginacijom kada se prosledi { page, per_page, ... }
+ * -> vraca { data, total, current_page, per_page, last_page }.
+ * Bez parametara backend vraca cijelu listu (niz) radi unazad-kompatibilnosti.
+ */
+export function useFinances(params = {}) {
   return useQuery({
-    queryKey: FINANCES_QUERY_KEY,
+    queryKey: [...FINANCES_QUERY_KEY, 'list', params],
     queryFn: async () => {
-      const { data } = await financesApi.getList();
+      const { data } = await financesApi.getList(params);
       return data;
+    },
+    placeholderData: keepPreviousData, // tabela ne "trepce" pri promjeni strane/filtera
+  });
+}
+
+/** Distinct lista obradjivaca za filter dropdown. */
+export function useFinanceProcessors() {
+  return useQuery({
+    queryKey: [...FINANCES_QUERY_KEY, 'processors'],
+    queryFn: async () => {
+      const { data } = await financesApi.getProcessors();
+      return Array.isArray(data) ? data : [];
     },
   });
 }

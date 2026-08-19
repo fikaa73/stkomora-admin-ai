@@ -8,7 +8,7 @@ import dayjs from 'dayjs';
 import { useMembers, useDeleteMember, useAddMember, useUpdateMember, useMember } from '../../hooks/useMembers';
 import { useCompanies } from '../../hooks/useCompanies';
 import { useLicenses } from '../../hooks/useLicenses';
-import { useFinances } from '../../hooks/useFinances';
+import { useMemberFinanceDetails } from '../../hooks/useFinances';
 import { useCertificates } from '../../hooks/useCertificates';
 import { certificatesApi } from '../../core/api/certificates';
 import MemberForm from '../../components/forms/MemberForm';
@@ -47,15 +47,13 @@ const modernTableProps = {
 function MemberDetailsPanel({ memberId }) {
   const { data: member, isLoading: loadingMember } = useMember(memberId);
   const { data: memberLicenses = [], isLoading: loadingLicenses } = useLicenses(memberId);
-  const { data: finances = [], isLoading: loadingFinances } = useFinances();
+  const { data: memberFinanceDetails, isLoading: loadingFinances } = useMemberFinanceDetails(memberId);
   const { data: certificates = [], isLoading: loadingCertificates } = useCertificates();
 
-  const memberFinances = useMemo(() => {
-    return finances.filter((f) => {
-      const userId = f.user_id ?? f.user?.id ?? f.member_id ?? f.member?.id;
-      return userId === memberId;
-    });
-  }, [finances, memberId]);
+  const memberFinances = useMemo(
+    () => (Array.isArray(memberFinanceDetails?.records) ? memberFinanceDetails.records : []),
+    [memberFinanceDetails]
+  );
 
   const lastFiveFinances = useMemo(() => {
     return [...memberFinances]
@@ -68,8 +66,9 @@ function MemberDetailsPanel({ memberId }) {
   }, [memberFinances]);
 
   const memberSaldo = useMemo(() => {
+    if (memberFinanceDetails?.total != null) return Number(memberFinanceDetails.total);
     return memberFinances.reduce((acc, row) => acc + Number(row.duguje || 0) - Number(row.potrazuje || 0), 0);
-  }, [memberFinances]);
+  }, [memberFinanceDetails, memberFinances]);
 
   const memberCertificates = useMemo(() => {
     return certificates.filter((c) => {
