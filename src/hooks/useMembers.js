@@ -8,12 +8,21 @@ import { membersApi, citiesApi } from '../core/api/members';
 const MEMBERS_QUERY_KEY = ['members'];
 const CITIES_QUERY_KEY = ['cities'];
 
+// Normalizuje API odgovor: snake_case primary_company -> camelCase primaryCompany
+function normalizeMember(m) {
+  if (!m || typeof m !== 'object') return m;
+  return {
+    ...m,
+    primaryCompany: m.primaryCompany ?? m.primary_company ?? null,
+  };
+}
+
 export function useMembers() {
   return useQuery({
     queryKey: MEMBERS_QUERY_KEY,
     queryFn: async () => {
       const { data } = await membersApi.getList();
-      return data;
+      return Array.isArray(data) ? data.map(normalizeMember) : data;
     },
   });
 }
@@ -23,7 +32,7 @@ export function useMember(id) {
     queryKey: [...MEMBERS_QUERY_KEY, id],
     queryFn: async () => {
       const { data } = await membersApi.getById(id);
-      return data;
+      return normalizeMember(data);
     },
     enabled: !!id,
   });
