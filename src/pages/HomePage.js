@@ -27,7 +27,7 @@ const SECTIONS = [
   { name: 'titleh1', label: 'Naslov', icon: <TagOutlined /> },
   { name: 'titleMembers', label: 'Članovi komore', icon: <TeamOutlined /> },
   { name: 'titleMember', label: 'Vijesti', icon: <FileTextOutlined /> },
-  { name: 'titleMemberH', label: 'Počastni članovi', icon: <StarOutlined /> },
+  { name: 'titleMemberH', label: 'Počasni članovi', icon: <StarOutlined /> },
 ];
 
 const PLACEHOLDERS = {
