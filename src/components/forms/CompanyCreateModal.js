@@ -21,6 +21,7 @@ export default function CompanyCreateModal({ open, onClose, onCreated, memberId 
       const values = await form.validateFields();
       const company = await addCompany.mutateAsync({
         name: values.name,
+        pib: values.pib || null,
         address: values.address || null,
         phone: values.phone || null,
         status: values.status || null,
@@ -55,6 +56,9 @@ export default function CompanyCreateModal({ open, onClose, onCreated, memberId 
       <Form form={form} layout="vertical" autoComplete="off">
         <Form.Item name="name" label="Naziv ustanove" rules={[{ required: true }]}>
           <Input placeholder="Unesite naziv ustanove" />
+        </Form.Item>
+        <Form.Item name="pib" label="PIB">
+          <Input placeholder="Poreski identifikacioni broj" />
         </Form.Item>
         <Form.Item name="city_id" label="Grad">
           <Select options={cityOptions} placeholder="Izaberite grad" showSearch optionFilterProp="label" allowClear />

@@ -35,6 +35,7 @@ export default function CompanyListPage() {
     if (!editingItem || drawerMode !== 'edit') return;
     form.setFieldsValue({
       name: editingItem.name,
+      pib: editingItem.pib,
       address: editingItem.address,
       phone: editingItem.phone,
       status: editingItem.status,
@@ -68,6 +69,7 @@ export default function CompanyListPage() {
       result = result.filter(
         (c) =>
           (c.name && c.name.toLowerCase().includes(lower)) ||
+          (c.pib && c.pib.toLowerCase().includes(lower)) ||
           (c.address && c.address.toLowerCase().includes(lower)) ||
           (c.phone && c.phone.toLowerCase().includes(lower)) ||
           (c.user?.name && c.user.name.toLowerCase().includes(lower)) ||
@@ -113,6 +115,7 @@ export default function CompanyListPage() {
     try {
       const payload = {
         name: values.name,
+        pib: values.pib || null,
         address: values.address || null,
         phone: values.phone || null,
         status: values.status || null,
@@ -146,6 +149,14 @@ export default function CompanyListPage() {
         ) : (
           '–'
         ),
+    },
+    {
+      title: 'PIB',
+      dataIndex: 'pib',
+      key: 'pib',
+      width: 120,
+      responsive: ['md'],
+      render: (v) => v || '–',
     },
     {
       title: 'Adresa',

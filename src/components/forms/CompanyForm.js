@@ -35,6 +35,9 @@ export default function CompanyForm({
       <Form.Item name="name" label="Naziv ustanove" rules={[{ required: true, message: 'Unesite naziv' }]}>
         <Input placeholder="Unesite naziv ustanove" />
       </Form.Item>
+      <Form.Item name="pib" label="PIB">
+        <Input placeholder="Poreski identifikacioni broj" />
+      </Form.Item>
       <Form.Item name="city_id" label="Grad">
         <Select
           options={cityOptions}
