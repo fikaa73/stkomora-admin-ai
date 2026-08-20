@@ -2,7 +2,7 @@
  * Modal to create a new Company (Ordinacija) – used next to company dropdown in MemberForm.
  */
 import React, { useMemo } from 'react';
-import { Modal, Form, Input, Select } from 'antd';
+import { Modal, Form, Input, Select, ConfigProvider } from 'antd';
 import { useAddCompany } from '../../hooks/useCompanies';
 import { useCities } from '../../hooks/useMembers';
 
@@ -53,6 +53,9 @@ export default function CompanyCreateModal({ open, onClose, onCreated, memberId 
       cancelText="Odustani"
       destroyOnClose
     >
+      <ConfigProvider
+        theme={{ components: { Form: { itemMarginBottom: 12, verticalLabelPadding: '0 0 4px' } } }}
+      >
       <Form form={form} layout="vertical" autoComplete="off">
         <Form.Item name="name" label="Naziv ustanove" rules={[{ required: true }]}>
           <Input placeholder="Unesite naziv ustanove" />
@@ -73,6 +76,7 @@ export default function CompanyCreateModal({ open, onClose, onCreated, memberId 
           <Input placeholder="Status" />
         </Form.Item>
       </Form>
+      </ConfigProvider>
     </Modal>
   );
 }

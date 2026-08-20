@@ -2,7 +2,7 @@
  * Company form fields – used inside Drawer (add/edit).
  */
 import React, { useMemo } from 'react';
-import { Form, Input, Select, Button } from 'antd';
+import { Form, Input, Select, Button, ConfigProvider } from 'antd';
 import { useCities } from '../../hooks/useMembers';
 import { useMembers } from '../../hooks/useMembers';
 
@@ -31,6 +31,9 @@ export default function CompanyForm({
   }, [members]);
 
   return (
+    <ConfigProvider
+      theme={{ components: { Form: { itemMarginBottom: 12, verticalLabelPadding: '0 0 4px' } } }}
+    >
     <Form form={form} layout="vertical" onFinish={onFinish} autoComplete="off">
       <Form.Item name="name" label="Naziv ustanove" rules={[{ required: true, message: 'Unesite naziv' }]}>
         <Input placeholder="Unesite naziv ustanove" />
@@ -72,5 +75,6 @@ export default function CompanyForm({
         {onCancel && <Button onClick={onCancel}>{cancelLabel}</Button>}
       </Form.Item>
     </Form>
+    </ConfigProvider>
   );
 }
