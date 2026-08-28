@@ -81,3 +81,16 @@ export function useDeleteMember() {
     },
   });
 }
+
+// Izmjena samo "napomena" (iz forme clana i iz finansija).
+export function useUpdateMemberNapomena() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, napomena }) => membersApi.updateNapomena(id, napomena),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: MEMBERS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: [...MEMBERS_QUERY_KEY, variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['finances'] }); // refresh finance member details
+    },
+  });
+}

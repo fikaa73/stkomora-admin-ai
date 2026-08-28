@@ -19,7 +19,7 @@ import {
   useMemberFinanceDetails,
   useFinanceProcessors,
 } from '../../hooks/useFinances';
-import { useMembers } from '../../hooks/useMembers';
+import { useMembers, useUpdateMemberNapomena } from '../../hooks/useMembers';
 import FinanceForm from '../../components/forms/FinanceForm';
 import ExemptionSection from '../../components/finances/ExemptionSection';
 
@@ -110,6 +110,22 @@ async function getPdfLogoDataUrl() {
 function MemberDetailsContent({ memberId, memberName = '' }) {
   const { data, isLoading } = useMemberFinanceDetails(memberId);
   const [pdfLoading, setPdfLoading] = useState(false);
+
+  // Napomena o stomatologu – editabilna iz finansija.
+  const updateNapomena = useUpdateMemberNapomena();
+  const [note, setNote] = useState('');
+  useEffect(() => {
+    setNote(data?.napomena ?? '');
+  }, [memberId, data?.napomena]);
+
+  const handleSaveNote = async () => {
+    try {
+      await updateNapomena.mutateAsync({ id: memberId, napomena: note.trim() || null });
+      message.success('Napomena je sačuvana');
+    } catch (e) {
+      message.error(e?.message || 'Greška pri čuvanju napomene');
+    }
+  };
 
   const handleDownloadPdf = async () => {
     if (!data) return;
@@ -337,6 +353,27 @@ function MemberDetailsContent({ memberId, memberName = '' }) {
   return (
     <>
       <ExemptionSection memberId={memberId} />
+      <div style={{ marginBottom: 16 }}>
+        <Text strong>Napomena</Text>
+        <Input.TextArea
+          rows={3}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Interna napomena o stomatologu"
+          maxLength={5000}
+          style={{ marginTop: 6 }}
+        />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+          <Button
+            type="primary"
+            size="small"
+            loading={updateNapomena.isPending}
+            onClick={handleSaveNote}
+          >
+            Sačuvaj napomenu
+          </Button>
+        </div>
+      </div>
       <div
         style={{
           display: 'flex',

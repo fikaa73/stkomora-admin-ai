@@ -288,6 +288,9 @@ function MemberDetailsPanel({ memberId }) {
           {member.is_active_member === false && member.inactive_reason ? (
             <Descriptions.Item label="Obrazloženje" span={2}>{member.inactive_reason}</Descriptions.Item>
           ) : null}
+          <Descriptions.Item label="Napomena" span={2}>
+            <span style={{ whiteSpace: 'pre-wrap' }}>{member.napomena || '–'}</span>
+          </Descriptions.Item>
         </Descriptions>
       </div>
 
@@ -400,6 +403,7 @@ export default function MemberListPage() {
       faximil: editingMember.fax_nbr ?? editingMember.faximil,
       email: editingMember.email,
       phone: editingMember.phone,
+      napomena: editingMember.napomena,
       is_active_member: editingMember.is_active_member ?? true,
       inactive_date: editingMember.inactive_date ? dayjs(editingMember.inactive_date) : null,
       inactive_reason: editingMember.inactive_reason,
@@ -573,6 +577,7 @@ export default function MemberListPage() {
         formData.append('fax_nbr', values.faximil || '');
         formData.append('phone', values.phone);
         formData.append('email', values.email || '');
+        formData.append('napomena', values.napomena || '');
         formData.append('city_id', values.city_id);
         if (values.company_id != null) formData.append('company_id', values.company_id);
         if (fileToUpload) formData.append('image', fileToUpload);
@@ -598,6 +603,7 @@ export default function MemberListPage() {
           fax_nbr: values.faximil || '',
           phone: values.phone,
           email: values.email || null,
+          napomena: values.napomena || null,
           city_id: values.city_id,
           company_id: values.company_id || null,
           is_active_member: isActiveMember,

@@ -15,6 +15,7 @@ export const membersApi = {
     return apiClient.put(`/member/${id}`, { ...data, id });
   },
   delete: (id) => apiClient.delete(`/member/${id}`),
+  updateNapomena: (id, napomena) => apiClient.put(`/member/${id}/napomena`, { napomena }),
 };
 
 export const citiesApi = {

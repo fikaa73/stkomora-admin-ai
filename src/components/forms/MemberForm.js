@@ -175,6 +175,9 @@ export default function MemberForm({
       <Form.Item name="phone" label="Telefon" rules={[{ required: true }, { min: 9, message: 'Min. 9 cifara' }]}>
         <Input placeholder="Broj telefona" />
       </Form.Item>
+      <Form.Item name="napomena" label="Napomena">
+        <Input.TextArea rows={3} placeholder="Interna napomena o stomatologu" maxLength={5000} allowClear />
+      </Form.Item>
 
       <Divider orientation="left" style={{ marginTop: 8 }}>Status člana</Divider>
       <Form.Item
