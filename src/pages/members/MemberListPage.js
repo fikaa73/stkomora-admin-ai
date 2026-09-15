@@ -681,7 +681,9 @@ export default function MemberListPage() {
       key: 'company',
       width: 130,
       ellipsis: true,
-      render: (_, record) => record.primaryCompany?.name ?? record.company ?? '–',
+      // Samo relacija (primaryCompany). Legacy 'company' string se ne prikazuje jer
+      // ostaje "viseci" kad se ordinacija ukloni (nikad se ne brise iz te kolone).
+      render: (_, record) => record.primaryCompany?.name ?? '–',
     },
     {
       title: 'Status',
