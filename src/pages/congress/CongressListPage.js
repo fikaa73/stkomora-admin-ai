@@ -101,7 +101,9 @@ export default function CongressListPage() {
         <Checkbox
           checked={record.paid === 1 || record.paid === true}
           onChange={() => handlePaymentChange(record)}
-          disabled={paymentMutation.isPending}
+          // Zakljucaj samo red koji se upravo upisuje - ostali ostaju klikabilni
+          // da administrator moze bez cekanja da prolazi kroz izvod.
+          disabled={paymentMutation.isPending && paymentMutation.variables?.id === record.id}
         />
       ),
     },
