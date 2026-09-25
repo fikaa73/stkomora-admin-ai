@@ -504,7 +504,7 @@ export default function FinanceListPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `clanarina_${reportPeriod.replace('-', '_')}.csv`;
+      a.download = `clanarina_${reportPeriod.replace('-', '_')}.xlsx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -800,7 +800,7 @@ export default function FinanceListPage() {
                 icon={<DownloadOutlined />}
                 onClick={handleDownloadReport}
                 loading={reportLoading}
-                title="CSV izvještaj o članarini za izabrani mjesec — za knjigovodstvenu agenciju"
+                title="Excel izvještaj o članarini za izabrani mjesec — za knjigovodstvenu agenciju"
               >
                 Izvještaj
               </Button>

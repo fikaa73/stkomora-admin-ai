@@ -15,7 +15,7 @@ export const financesApi = {
   /** Mjeseci za koje postoji obračun članarine (za padajući meni). */
   getReportPeriods: () => apiClient.get('/finances/monthly-report'),
 
-  /** CSV izvještaj o članarini za zadati mjesec — šalje se knjigovodstvenoj agenciji. */
+  /** Excel (.xlsx) izvještaj o članarini za zadati mjesec — šalje se knjigovodstvenoj agenciji. */
   downloadMonthlyReport: async (period) => {
     const { data } = await apiClient.get('/finances/monthly-report', {
       params: { period },
