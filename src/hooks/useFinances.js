@@ -90,3 +90,14 @@ export function useDeleteFinance() {
     },
   });
 }
+
+/** Mjeseci za koje postoji obračun članarine — puni padajući meni izvještaja. */
+export function useReportPeriods() {
+  return useQuery({
+    queryKey: [...FINANCES_QUERY_KEY, 'report-periods'],
+    queryFn: async () => {
+      const { data } = await financesApi.getReportPeriods();
+      return data?.periods ?? [];
+    },
+  });
+}

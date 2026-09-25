@@ -11,4 +11,16 @@ export const financesApi = {
   create: (data) => apiClient.post('/finances', data),
   update: (id, data) => apiClient.put(`/finances/${id}`, data),
   delete: (id) => apiClient.delete(`/finances/${id}`),
+
+  /** Mjeseci za koje postoji obračun članarine (za padajući meni). */
+  getReportPeriods: () => apiClient.get('/finances/monthly-report'),
+
+  /** CSV izvještaj o članarini za zadati mjesec — šalje se knjigovodstvenoj agenciji. */
+  downloadMonthlyReport: async (period) => {
+    const { data } = await apiClient.get('/finances/monthly-report', {
+      params: { period },
+      responseType: 'blob',
+    });
+    return data;
+  },
 };

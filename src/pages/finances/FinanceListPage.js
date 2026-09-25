@@ -18,7 +18,9 @@ import {
   useDeleteFinance,
   useMemberFinanceDetails,
   useFinanceProcessors,
+  useReportPeriods,
 } from '../../hooks/useFinances';
+import { financesApi } from '../../core/api/finances';
 import { useMembers, useUpdateMemberNapomena } from '../../hooks/useMembers';
 import FinanceForm from '../../components/forms/FinanceForm';
 import ExemptionSection from '../../components/finances/ExemptionSection';
@@ -484,6 +486,37 @@ export default function FinanceListPage() {
   const { data: members = [] } = useMembers();
   const { data: processors = [] } = useFinanceProcessors();
 
+  // Mjesecni izvjestaj o clanarini (CSV za knjigovodstvenu agenciju)
+  const { data: reportPeriods = [] } = useReportPeriods();
+  const [reportPeriod, setReportPeriod] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
+
+  // Podrazumijevano najnoviji mjesec, da se ne bira rucno u najcescem slucaju
+  useEffect(() => {
+    if (!reportPeriod && reportPeriods.length) setReportPeriod(reportPeriods[0]);
+  }, [reportPeriods, reportPeriod]);
+
+  const handleDownloadReport = async () => {
+    if (!reportPeriod) return;
+    setReportLoading(true);
+    try {
+      const blob = await financesApi.downloadMonthlyReport(reportPeriod);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `clanarina_${reportPeriod.replace('-', '_')}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      message.success(`Izvještaj za ${reportPeriod} je preuzet`);
+    } catch (e) {
+      message.error('Preuzimanje izvještaja nije uspjelo. Pokušajte ponovo.');
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   const { data: editingItem, isLoading: loadingItem } = useFinance(editingId);
 
   useEffect(() => {
@@ -755,6 +788,24 @@ export default function FinanceListPage() {
             onSearch={(v) => { setSearch(v.trim()); setPage(1); }}
             style={{ width: 220, minWidth: 160 }}
           />
+          {reportPeriods.length > 0 && (
+            <Space.Compact>
+              <Select
+                value={reportPeriod}
+                onChange={setReportPeriod}
+                style={{ width: 120 }}
+                options={reportPeriods.map((p) => ({ value: p, label: p }))}
+              />
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={handleDownloadReport}
+                loading={reportLoading}
+                title="CSV izvještaj o članarini za izabrani mjesec — za knjigovodstvenu agenciju"
+              >
+                Izvještaj
+              </Button>
+            </Space.Compact>
+          )}
           <Button type="primary" icon={<PlusOutlined />} onClick={openAddDrawer}>
             Dodaj stavku
           </Button>
