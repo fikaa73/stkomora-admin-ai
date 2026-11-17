@@ -28,6 +28,34 @@ export function useAddExemption() {
   });
 }
 
+/**
+ * Poništavanje članarina koje su već zadužene u periodu oslobođenja.
+ * Mijenja i finansijsku karticu člana, pa se osvježavaju i 'finances'.
+ */
+export function useClearExemptionCharges() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ memberId, id }) => exemptionsApi.clearCharges(memberId, id),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [...EXEMPTIONS_KEY, variables.memberId] });
+      queryClient.invalidateQueries({ queryKey: [...EXEMPTIONS_KEY, 'pending-corrections'] });
+      queryClient.invalidateQueries({ queryKey: ['finances'] });
+    },
+  });
+}
+
+/** Svi članovi kojima oslobođenje pokriva već zadužene mjesece. */
+export function usePendingCorrections(enabled = true) {
+  return useQuery({
+    queryKey: [...EXEMPTIONS_KEY, 'pending-corrections'],
+    queryFn: async () => {
+      const { data } = await exemptionsApi.pendingCorrections();
+      return data;
+    },
+    enabled,
+  });
+}
+
 export function useDeleteExemption() {
   const queryClient = useQueryClient();
   return useMutation({

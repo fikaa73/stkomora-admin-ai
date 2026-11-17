@@ -24,6 +24,7 @@ import { financesApi } from '../../core/api/finances';
 import { useMembers, useUpdateMemberNapomena } from '../../hooks/useMembers';
 import FinanceForm from '../../components/forms/FinanceForm';
 import ExemptionSection from '../../components/finances/ExemptionSection';
+import ExemptionCorrectionsBanner from '../../components/finances/ExemptionCorrectionsBanner';
 
 const { Search } = Input;
 const { Text } = Typography;
@@ -811,6 +812,7 @@ export default function FinanceListPage() {
           </Button>
         </Space>
       </div>
+      <ExemptionCorrectionsBanner />
       <Table
         rowKey="id"
         columns={columns}

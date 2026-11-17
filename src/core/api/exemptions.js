@@ -19,6 +19,11 @@ export const exemptionsApi = {
     return apiClient.post(`/member/${memberId}/exemptions`, formData);
   },
   delete: (memberId, id) => apiClient.delete(`/member/${memberId}/exemptions/${id}`),
+  // Oslobođenje upisano unazad: poništi članarine koje su već zadužene u njegovom periodu.
+  clearCharges: (memberId, id) =>
+    apiClient.post(`/member/${memberId}/exemptions/${id}/clear-charges`),
+  // Svi članovi kojima oslobođenje pokriva već zadužene mjesece.
+  pendingCorrections: () => apiClient.get('/exemptions/pending-corrections'),
   fetchDocumentBlob: async (memberId, id, disposition = 'inline') => {
     const { data } = await apiClient.get(
       `/member/${memberId}/exemptions/${id}/document`,
