@@ -4,7 +4,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import {
   Table, Input, Button, Space, Modal, Typography, message,
-  Drawer, Spin, Form, Select, Tag,
+  Drawer, Spin, Form, Select, Tag, DatePicker,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -28,6 +28,25 @@ import ExemptionCorrectionsBanner from '../../components/finances/ExemptionCorre
 
 const { Search } = Input;
 const { Text } = Typography;
+
+/*
+ * Server vraća grešku kao JSON, ali zahtjev ide sa responseType: 'blob',
+ * pa axios i tijelo greške preda kao Blob — treba ga pročitati da bi se
+ * korisniku pokazalo zašto izvještaj nije prošao (npr. prazan period).
+ */
+async function serverMessage(e) {
+  try {
+    const blob = e?.response?.data;
+    if (!blob || typeof blob.text !== 'function') return null;
+    const parsed = JSON.parse(await blob.text());
+    const m = parsed?.message;
+    if (typeof m === 'string') return m;
+    if (m && typeof m === 'object') return Object.values(m).flat().join(' ');
+  } catch (_) {
+    /* nije JSON – pada na opštu poruku */
+  }
+  return null;
+}
 
 function fmtMoney(v) {
   const n = Number(v);
@@ -492,6 +511,12 @@ export default function FinanceListPage() {
   const [reportPeriod, setReportPeriod] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
 
+  // „Izvještaj za finansije — pregled članarina": promet u periodu od–do mjeseca.
+  // Podrazumijevano od januara tekuće godine do danas — to je godišnji zbir koji
+  // knjigovodstvo traži; od 2027. biraju pojedinačni mjesec.
+  const [overviewRange, setOverviewRange] = useState([dayjs().startOf('year'), dayjs()]);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+
   // Podrazumijevano najnoviji mjesec, da se ne bira rucno u najcescem slucaju
   useEffect(() => {
     if (!reportPeriod && reportPeriods.length) setReportPeriod(reportPeriods[0]);
@@ -515,6 +540,37 @@ export default function FinanceListPage() {
       message.error('Preuzimanje izvještaja nije uspjelo. Pokušajte ponovo.');
     } finally {
       setReportLoading(false);
+    }
+  };
+
+  const handleDownloadOverview = async () => {
+    const [from, to] = overviewRange || [];
+    if (!from || !to) {
+      message.warning('Izaberite period — od mjeseca do mjeseca.');
+      return;
+    }
+    const fromM = from.format('YYYY-MM');
+    const toM = to.format('YYYY-MM');
+    setOverviewLoading(true);
+    try {
+      const blob = await financesApi.downloadClanarinaOverview(fromM, toM);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const period = fromM === toM
+        ? fromM.replace('-', '_')
+        : `${fromM.replace('-', '_')}-${toM.replace('-', '_')}`;
+      a.download = `izvjestaj_finansije_clanarine_${period}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      message.success('Izvještaj za finansije je preuzet');
+    } catch (e) {
+      const poruka = await serverMessage(e);
+      message.error(poruka || 'Preuzimanje izvještaja nije uspjelo. Pokušajte ponovo.');
+    } finally {
+      setOverviewLoading(false);
     }
   };
 
@@ -789,6 +845,24 @@ export default function FinanceListPage() {
             onSearch={(v) => { setSearch(v.trim()); setPage(1); }}
             style={{ width: 220, minWidth: 160 }}
           />
+          <Space.Compact>
+            <DatePicker.RangePicker
+              picker="month"
+              value={overviewRange}
+              onChange={setOverviewRange}
+              format="MM.YYYY"
+              allowClear={false}
+              style={{ width: 210 }}
+            />
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={handleDownloadOverview}
+              loading={overviewLoading}
+              title="Izvještaj za finansije — pregled članarina: zaduženje, uplate i saldo po članu za izabrani period"
+            >
+              Izvještaj za finansije
+            </Button>
+          </Space.Compact>
           {reportPeriods.length > 0 && (
             <Space.Compact>
               <Select
@@ -801,9 +875,9 @@ export default function FinanceListPage() {
                 icon={<DownloadOutlined />}
                 onClick={handleDownloadReport}
                 loading={reportLoading}
-                title="Excel izvještaj o članarini za izabrani mjesec — za knjigovodstvenu agenciju"
+                title="Obračun članarine za izabrani mjesec — ko je zadužen, ko oslobođen"
               >
-                Izvještaj
+                Mjesečni obračun
               </Button>
             </Space.Compact>
           )}
