@@ -6,12 +6,15 @@
 import React, { useState } from 'react';
 import {
   Card, Checkbox, DatePicker, InputNumber, Upload, Button, Input,
-  Space, Tag, Typography, message, Popconfirm, List, Tooltip, Alert,
+  Space, Tag, Typography, message, Popconfirm, List, Tooltip, Alert, Modal,
 } from 'antd';
-import { UploadOutlined, EyeOutlined, DeleteOutlined, FilePdfOutlined } from '@ant-design/icons';
+import {
+  UploadOutlined, EyeOutlined, DeleteOutlined, FilePdfOutlined, EditOutlined,
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 import {
-  useMemberExemptions, useAddExemption, useDeleteExemption, useClearExemptionCharges,
+  useMemberExemptions, useAddExemption, useUpdateExemption, useDeleteExemption,
+  useClearExemptionCharges,
 } from '../../hooks/useExemptions';
 import { exemptionsApi } from '../../core/api/exemptions';
 import { getApiErrorMessage } from '../../utils/apiError';
@@ -32,6 +35,7 @@ function fmtAmount(v) {
 export default function ExemptionSection({ memberId }) {
   const { data: exemptions = [], isLoading } = useMemberExemptions(memberId);
   const addExemption = useAddExemption();
+  const updateExemption = useUpdateExemption();
   const deleteExemption = useDeleteExemption();
   const clearCharges = useClearExemptionCharges();
   const [clearingId, setClearingId] = useState(null);
@@ -42,6 +46,9 @@ export default function ExemptionSection({ memberId }) {
   const [note, setNote] = useState('');
   const [file, setFile] = useState(null);
   const [viewLoading, setViewLoading] = useState(null);
+  // Kad se mijenja postojeće oslobođenje, ista forma radi u režimu izmjene.
+  const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const currentPeriod = dayjs().format('YYYY-MM');
   const activeExemption = (exemptions || []).find(
@@ -54,8 +61,36 @@ export default function ExemptionSection({ memberId }) {
     setMonths(1);
     setNote('');
     setFile(null);
+    setEditingId(null);
   };
 
+  const startEdit = (ex) => {
+    setEditingId(ex.id);
+    setChecked(true);
+    setStartMonth(dayjs(`${ex.start_period}-01`));
+    setMonths(ex.months);
+    setNote(ex.note || '');
+    setFile(null);
+  };
+
+  /** Rečenica tipa „9 mjeseci ide na 0,00 € (90.00 €)". */
+  const opisPrimjene = (apply) => {
+    if (!apply) return null;
+    const d = [];
+    if (apply.months > 0) {
+      d.push(`${apply.months} mj. članarine ide na 0,00 € (ukupno ${fmtAmount(apply.amount)} €)`);
+    }
+    if (apply.to_create > 0) {
+      d.push(`${apply.to_create} mj. bez stavke dobija novu stavku od 0,00 €`);
+    }
+    return d.length ? d : null;
+  };
+
+  /**
+   * Snimanje uvijek prvo pokaže šta mijenja na kartici. Automatika smije da
+   * ukine drugi klik, ali ne i uvid — pogrešno unesen period (60 umjesto 6
+   * mjeseci) ne smije neprimijetno izmijeniti karticu.
+   */
   const handleSave = async () => {
     if (!months || months < 1) {
       message.error('Unesite broj mjeseci (najmanje 1)');
@@ -65,21 +100,86 @@ export default function ExemptionSection({ memberId }) {
       message.error('Izaberite početni mjesec');
       return;
     }
+
+    const payload = {
+      start_period: startMonth.format('YYYY-MM'),
+      months,
+      note,
+      document: file,
+    };
+
+    setSaving(true);
+    let pregled = null;
     try {
-      await addExemption.mutateAsync({
-        memberId,
-        payload: {
-          start_period: startMonth.format('YYYY-MM'),
-          months,
-          note,
-          document: file,
-        },
+      const { data } = await exemptionsApi.preview(memberId, {
+        start_period: payload.start_period,
+        months: payload.months,
+        exemption_id: editingId || undefined,
       });
-      message.success('Oslobođenje je sačuvano');
-      resetForm();
+      pregled = data;
     } catch (e) {
-      message.error(getApiErrorMessage(e, 'Greška pri čuvanju oslobođenja'));
+      setSaving(false);
+      message.error(getApiErrorMessage(e, 'Greška pri provjeri izmjena'));
+      return;
     }
+    setSaving(false);
+
+    const primjena = opisPrimjene(pregled && pregled.apply);
+    const vracanje = pregled && pregled.restore && pregled.restore.months > 0
+      ? `${pregled.restore.months} mj. izlazi iz oslobođenja i vraća se na redovnu članarinu `
+        + `(ukupno ${fmtAmount(pregled.restore.amount)} €)`
+      : null;
+
+    const sacuvaj = async () => {
+      try {
+        const { data } = editingId
+          ? await updateExemption.mutateAsync({ memberId, id: editingId, payload })
+          : await addExemption.mutateAsync({ memberId, payload });
+
+        const p = data && data.applied;
+        const r = data && data.restored;
+        const djelovi = [];
+        if (p && p.cleared) djelovi.push(`poništeno ${p.cleared} mj.`);
+        if (p && p.created) djelovi.push(`dodato ${p.created} mj. na 0,00 €`);
+        if (r && r.restored) djelovi.push(`vraćeno ${r.restored} mj. na 10,00 €`);
+
+        message.success(
+          djelovi.length
+            ? `Oslobođenje je sačuvano — ${djelovi.join(', ')}`
+            : 'Oslobođenje je sačuvano'
+        );
+        resetForm();
+      } catch (e) {
+        message.error(getApiErrorMessage(e, 'Greška pri čuvanju oslobođenja'));
+      }
+    };
+
+    if (!primjena && !vracanje) {
+      await sacuvaj();
+      return;
+    }
+
+    Modal.confirm({
+      title: editingId ? 'Izmijeniti oslobođenje?' : 'Sačuvati oslobođenje?',
+      width: 520,
+      okText: 'Potvrdi',
+      cancelText: 'Odustani',
+      content: (
+        <div>
+          <div style={{ marginBottom: 8 }}>
+            Period: <b>{startMonth.format('MM.YYYY')}</b> — {months} mj.
+          </div>
+          <ul style={{ paddingLeft: 18, marginBottom: 8 }}>
+            {(primjena || []).map((t) => <li key={t}>{t}</li>)}
+            {vracanje && <li>{vracanje}</li>}
+          </ul>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Uplate, početno stanje i ostale stavke se ne diraju. Svaka izmjena se bilježi.
+          </Text>
+        </div>
+      ),
+      onOk: sacuvaj,
+    });
   };
 
   const handleView = async (ex) => {
@@ -117,10 +217,16 @@ export default function ExemptionSection({ memberId }) {
 
   const handleDelete = async (ex) => {
     try {
-      await deleteExemption.mutateAsync({ memberId, id: ex.id });
-      message.success('Oslobođenje je obrisano');
+      const { data } = await deleteExemption.mutateAsync({ memberId, id: ex.id });
+      const vraceno = data && data.restored ? data.restored.restored : 0;
+      message.success(
+        vraceno
+          ? `Oslobođenje je obrisano — ${vraceno} mj. vraćeno na redovnu članarinu`
+          : 'Oslobođenje je obrisano'
+      );
+      if (editingId === ex.id) resetForm();
     } catch (e) {
-      message.error('Greška pri brisanju');
+      message.error(getApiErrorMessage(e, 'Greška pri brisanju'));
     }
   };
 
@@ -163,8 +269,9 @@ export default function ExemptionSection({ memberId }) {
             description={
               <div>
                 <div style={{ fontSize: 12, marginBottom: 8 }}>
-                  Oslobođenje {fmtPeriod(ex.start_period)} – {fmtPeriod(ex.end_period)} upisano je
-                  poslije tih mjeseci, pa ih sistem nije sam poništio.
+                  Oslobođenje {fmtPeriod(ex.start_period)} – {fmtPeriod(ex.end_period)} unijeto je
+                  prije nego što je sistem počeo sam da usklađuje zaduženja. Jedan klik i to se
+                  poravnava.
                 </div>
                 <Popconfirm
                   title="Poništiti već nastala zaduženja?"
@@ -243,9 +350,16 @@ export default function ExemptionSection({ memberId }) {
           </div>
 
           <div style={{ marginTop: 12 }}>
-            <Button type="primary" onClick={handleSave} loading={addExemption.isPending}>
-              Sačuvaj oslobođenje
-            </Button>
+            <Space>
+              <Button
+                type="primary"
+                onClick={handleSave}
+                loading={saving || addExemption.isPending || updateExemption.isPending}
+              >
+                {editingId ? 'Sačuvaj izmjenu' : 'Sačuvaj oslobođenje'}
+              </Button>
+              {editingId && <Button onClick={resetForm}>Odustani</Button>}
+            </Space>
             <Text type="secondary" style={{ marginLeft: 10, fontSize: 12 }}>
               Za {months || 0} mj. od {startMonth ? startMonth.format('MM.YYYY') : '–'} članarina = 0
             </Text>
@@ -278,11 +392,32 @@ export default function ExemptionSection({ memberId }) {
                   ) : (
                     <Text key="nofile" type="secondary" style={{ fontSize: 12 }}>bez PDF-a</Text>
                   ),
+                  <Tooltip title="Izmijeni period" key="edit">
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => startEdit(ex)}
+                    />
+                  </Tooltip>,
                   <Popconfirm
                     key="del"
                     title="Obrisati oslobođenje?"
-                    okText="Da"
-                    cancelText="Ne"
+                    description={
+                      <div style={{ maxWidth: 320 }}>
+                        {ex.restorable && ex.restorable.months > 0 ? (
+                          <>
+                            {ex.restorable.months} mj. se vraća na redovnu članarinu
+                            {' '}(<b>{fmtAmount(ex.restorable.amount)} €</b>), jer osnov za
+                            oslobođenje više ne postoji.
+                          </>
+                        ) : (
+                          'Nijedan mjesec se neće promijeniti.'
+                        )}
+                      </div>
+                    }
+                    okText="Obriši"
+                    cancelText="Odustani"
                     onConfirm={() => handleDelete(ex)}
                   >
                     <Button type="link" size="small" danger icon={<DeleteOutlined />} />

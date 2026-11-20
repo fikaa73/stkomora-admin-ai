@@ -27,6 +27,19 @@ export const financesApi = {
     return data;
   },
 
+  /**
+   * Excel (.xlsx) „Početno stanje — dug po članovima na dan" (podrazumijevano 31.12.2025).
+   * Dopuna pregleda članarina: onaj daje promet u periodu, ovaj stanje koje je u period ušlo.
+   * changedSince je opcion — od kog datuma se stavka smatra naknadno unijetom.
+   */
+  downloadPocetnoStanje: async (asOf, changedSince) => {
+    const { data } = await apiClient.get('/finances/pocetno-stanje', {
+      params: changedSince ? { as_of: asOf, changed_since: changedSince } : { as_of: asOf },
+      responseType: 'blob',
+    });
+    return data;
+  },
+
   /** Excel (.xlsx) izvještaj o članarini za zadati mjesec — šalje se knjigovodstvenoj agenciji. */
   downloadMonthlyReport: async (period) => {
     const { data } = await apiClient.get('/finances/monthly-report', {

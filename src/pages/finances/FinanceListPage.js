@@ -517,6 +517,12 @@ export default function FinanceListPage() {
   const [overviewRange, setOverviewRange] = useState([dayjs().startOf('year'), dayjs()]);
   const [overviewLoading, setOverviewLoading] = useState(false);
 
+  // „Početno stanje — dug po članovima na dan": stanje koje je ušlo u tekuću
+  // godinu. Podrazumijevano 31.12. prošle godine, jer knjigovodstvo upravo to
+  // stanje knjiži kao početno.
+  const [openingDate, setOpeningDate] = useState(dayjs().startOf('year').subtract(1, 'day'));
+  const [openingLoading, setOpeningLoading] = useState(false);
+
   // Podrazumijevano najnoviji mjesec, da se ne bira rucno u najcescem slucaju
   useEffect(() => {
     if (!reportPeriod && reportPeriods.length) setReportPeriod(reportPeriods[0]);
@@ -571,6 +577,32 @@ export default function FinanceListPage() {
       message.error(poruka || 'Preuzimanje izvještaja nije uspjelo. Pokušajte ponovo.');
     } finally {
       setOverviewLoading(false);
+    }
+  };
+
+  const handleDownloadOpening = async () => {
+    if (!openingDate) {
+      message.warning('Izaberite datum stanja.');
+      return;
+    }
+    const asOf = openingDate.format('YYYY-MM-DD');
+    setOpeningLoading(true);
+    try {
+      const blob = await financesApi.downloadPocetnoStanje(asOf);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pocetno_stanje_${asOf.replace(/-/g, '_')}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      message.success('Pregled početnog stanja je preuzet');
+    } catch (e) {
+      const poruka = await serverMessage(e);
+      message.error(poruka || 'Preuzimanje pregleda nije uspjelo. Pokušajte ponovo.');
+    } finally {
+      setOpeningLoading(false);
     }
   };
 
@@ -861,6 +893,23 @@ export default function FinanceListPage() {
               title="Izvještaj za finansije — pregled članarina: zaduženje, uplate i saldo po članu za izabrani period"
             >
               Izvještaj za finansije
+            </Button>
+          </Space.Compact>
+          <Space.Compact>
+            <DatePicker
+              value={openingDate}
+              onChange={setOpeningDate}
+              format="DD.MM.YYYY"
+              allowClear={false}
+              style={{ width: 130 }}
+            />
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={handleDownloadOpening}
+              loading={openingLoading}
+              title="Početno stanje — dug po članovima na izabrani dan, uz spisak stavki koje su u taj period unijete ili mijenjane naknadno"
+            >
+              Početno stanje
             </Button>
           </Space.Compact>
           {reportPeriods.length > 0 && (

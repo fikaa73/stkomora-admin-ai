@@ -56,6 +56,19 @@ export function usePendingCorrections(enabled = true) {
   });
 }
 
+export function useUpdateExemption() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ memberId, id, payload }) => exemptionsApi.update(memberId, id, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [...EXEMPTIONS_KEY, variables.memberId] });
+      queryClient.invalidateQueries({ queryKey: [...EXEMPTIONS_KEY, 'pending-corrections'] });
+      queryClient.invalidateQueries({ queryKey: ['finances'] });
+      queryClient.invalidateQueries({ queryKey: ['members'] });
+    },
+  });
+}
+
 export function useDeleteExemption() {
   const queryClient = useQueryClient();
   return useMutation({
