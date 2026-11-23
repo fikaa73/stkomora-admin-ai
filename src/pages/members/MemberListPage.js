@@ -12,24 +12,18 @@ import { useMemberFinanceDetails } from '../../hooks/useFinances';
 import { useCertificates } from '../../hooks/useCertificates';
 import { certificatesApi } from '../../core/api/certificates';
 import MemberForm from '../../components/forms/MemberForm';
+import {
+  MEMBER_STATUS,
+  MEMBER_STATUS_OPTIONS,
+  MEMBER_STATUS_TAG,
+  memberStatusOf,
+  statusLabels,
+} from '../../core/constants/memberStatus';
 import apiClient from '../../core/api/client';
+import { getApiErrorMessage } from '../../utils/apiError';
 
 const { Search } = Input;
 const { Text } = Typography;
-
-function getApiErrorMessage(error, fallback = 'Greška') {
-  const payload = error?.response?.data?.message;
-  if (typeof payload === 'string' && payload.trim()) return payload;
-
-  if (payload && typeof payload === 'object') {
-    const firstValue = Object.values(payload)[0];
-    if (Array.isArray(firstValue) && firstValue[0]) return firstValue[0];
-    if (typeof firstValue === 'string' && firstValue.trim()) return firstValue;
-  }
-
-  if (typeof error?.message === 'string' && error.message.trim()) return error.message;
-  return fallback;
-}
 
 function formatMoney(v) {
   const n = Number(v);
@@ -232,8 +226,8 @@ function MemberDetailsPanel({ memberId }) {
             <Typography.Title level={4} style={{ margin: 0 }}>{fullName}</Typography.Title>
             <Typography.Text type="secondary">{member.email || 'Bez email adrese'}</Typography.Text>
             <div style={{ marginTop: 8 }}>
-              <Tag color={member.is_active_member === false ? 'red' : 'green'}>
-                {member.is_active_member === false ? 'Neaktivan član' : 'Aktivan član'}
+              <Tag color={MEMBER_STATUS_TAG[memberStatusOf(member)].color}>
+                {MEMBER_STATUS_OPTIONS.find((o) => o.value === memberStatusOf(member))?.label}
               </Tag>
               <Tag color={statusColor}>{member.status || 'status nije definisan'}</Tag>
               <Tag color={member.is_exempt_now ? 'orange' : 'green'}>
@@ -281,12 +275,15 @@ function MemberDetailsPanel({ memberId }) {
           <Descriptions.Item label="Grad">{member.city?.name ?? member.city ?? '–'}</Descriptions.Item>
           <Descriptions.Item label="Ordinacija">{member.primaryCompany?.name ?? member.company ?? '–'}</Descriptions.Item>
           <Descriptions.Item label="Status člana">
-            {member.is_active_member === false
-              ? `Neaktivan${member.inactive_date ? ' — ' + dayjs(member.inactive_date).format('DD.MM.YYYY') : ''}`
-              : 'Aktivan'}
+            {MEMBER_STATUS_TAG[memberStatusOf(member)].label}
+            {memberStatusOf(member) !== MEMBER_STATUS.aktivan && member.inactive_date
+              ? ' — ' + dayjs(member.inactive_date).format('DD.MM.YYYY')
+              : ''}
           </Descriptions.Item>
-          {member.is_active_member === false && member.inactive_reason ? (
-            <Descriptions.Item label="Obrazloženje" span={2}>{member.inactive_reason}</Descriptions.Item>
+          {memberStatusOf(member) !== MEMBER_STATUS.aktivan && member.inactive_reason ? (
+            <Descriptions.Item label={statusLabels(memberStatusOf(member)).obrazlozenje} span={2}>
+              {member.inactive_reason}
+            </Descriptions.Item>
           ) : null}
           <Descriptions.Item label="Napomena" span={2}>
             <span style={{ whiteSpace: 'pre-wrap' }}>{member.napomena || '–'}</span>
@@ -365,7 +362,7 @@ export default function MemberListPage() {
   const [searchText, setSearchText] = useState('');
   const [companyFilter, setCompanyFilter] = useState('all');
   const [feeFilter, setFeeFilter] = useState('all'); // 'all' | 'liable' | 'exempt'
-  const [statusFilter, setStatusFilter] = useState('active'); // 'all' | 'active' | 'inactive'
+  const [statusFilter, setStatusFilter] = useState(MEMBER_STATUS.aktivan); // 'all' | aktivan | neaktivan | odbijen
   const [deleteModal, setDeleteModal] = useState({ visible: false, member: null });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState('add'); // 'add' | 'edit'
@@ -404,7 +401,7 @@ export default function MemberListPage() {
       email: editingMember.email,
       phone: editingMember.phone,
       napomena: editingMember.napomena,
-      is_active_member: editingMember.is_active_member ?? true,
+      member_status: memberStatusOf(editingMember),
       inactive_date: editingMember.inactive_date ? dayjs(editingMember.inactive_date) : null,
       inactive_reason: editingMember.inactive_reason,
     });
@@ -442,10 +439,10 @@ export default function MemberListPage() {
         (m) => (m.company_id === companyFilter || m.primaryCompany?.id === companyFilter)
       );
     }
-    if (statusFilter === 'active') {
-      result = result.filter((m) => m.is_active_member !== false);
-    } else if (statusFilter === 'inactive') {
-      result = result.filter((m) => m.is_active_member === false);
+    if (statusFilter !== 'all') {
+      // 'inactive' je samo neaktivan — odbijeni su zasebna grupacija, ne ulaze
+      // u neaktivne, iako se sistemu ponašaju isto.
+      result = result.filter((m) => memberStatusOf(m) === statusFilter);
     }
     if (feeFilter === 'liable') {
       result = result.filter((m) => !m.is_exempt_now);
@@ -560,7 +557,11 @@ export default function MemberListPage() {
       const sexValue = typeof values.sex === 'number' ? values.sex : (values.sex?.value || values.sex || 1);
       const fileToUpload = imageFileFromForm ?? imageFileRef.current ?? imageFile;
 
-      const isActiveMember = values.is_active_member !== false;
+      // Status je ono što se bira; prekidač `is_active_member` server izvodi iz
+      // njega (i neaktivan i odbijen znače da sistem člana ne dira). Šalje se i
+      // dalje, da panel radi i prema serveru koji još ne zna za status.
+      const memberStatus = values.member_status || MEMBER_STATUS.aktivan;
+      const isActiveMember = memberStatus === MEMBER_STATUS.aktivan;
       const inactiveDate =
         !isActiveMember && values.inactive_date
           ? dayjs(values.inactive_date).format('YYYY-MM-DD')
@@ -583,6 +584,7 @@ export default function MemberListPage() {
         if (fileToUpload) formData.append('image', fileToUpload);
         if (removeImage) formData.append('remove_image', '1');
         formData.append('is_active_member', isActiveMember ? '1' : '0');
+        formData.append('member_status', memberStatus);
         if (inactiveDate) formData.append('inactive_date', inactiveDate);
         if (inactiveReason) formData.append('inactive_reason', inactiveReason);
 
@@ -607,6 +609,7 @@ export default function MemberListPage() {
           city_id: values.city_id,
           company_id: values.company_id || null,
           is_active_member: isActiveMember,
+          member_status: memberStatus,
           inactive_date: inactiveDate,
           inactive_reason: inactiveReason,
         };
@@ -687,25 +690,31 @@ export default function MemberListPage() {
     },
     {
       title: 'Status',
-      key: 'is_active_member',
+      key: 'member_status',
       width: 110,
-      render: (_, record) =>
-        record.is_active_member === false ? (
-          <Tooltip
-            title={
-              [
-                record.inactive_reason,
-                record.inactive_date ? dayjs(record.inactive_date).format('DD.MM.YYYY') : null,
-              ]
-                .filter(Boolean)
-                .join(' — ') || 'Neaktivan član'
-            }
-          >
-            <Tag color="red">Neaktivan</Tag>
+      render: (_, record) => {
+        const status = memberStatusOf(record);
+        const oznaka = MEMBER_STATUS_TAG[status];
+
+        if (status === MEMBER_STATUS.aktivan) {
+          return <Tag color={oznaka.color}>{oznaka.label}</Tag>;
+        }
+
+        const opis =
+          [
+            record.inactive_reason,
+            record.inactive_date ? dayjs(record.inactive_date).format('DD.MM.YYYY') : null,
+          ]
+            .filter(Boolean)
+            .join(' — ') ||
+          (status === MEMBER_STATUS.odbijen ? 'Odbijen — bez upisanog osnova' : 'Neaktivan član');
+
+        return (
+          <Tooltip title={opis}>
+            <Tag color={oznaka.color}>{oznaka.label}</Tag>
           </Tooltip>
-        ) : (
-          <Tag color="green">Aktivan</Tag>
-        ),
+        );
+      },
     },
     {
       title: 'Članarina',
@@ -834,8 +843,9 @@ export default function MemberListPage() {
             onChange={setStatusFilter}
             style={{ width: 190, minWidth: 160 }}
             options={[
-              { value: 'active', label: 'Aktivni članovi' },
-              { value: 'inactive', label: 'Neaktivni članovi' },
+              { value: MEMBER_STATUS.aktivan, label: 'Aktivni članovi' },
+              { value: MEMBER_STATUS.neaktivan, label: 'Neaktivni članovi' },
+              { value: MEMBER_STATUS.odbijen, label: 'Odbijeni' },
               { value: 'all', label: 'Status: svi' },
             ]}
           />
@@ -845,8 +855,8 @@ export default function MemberListPage() {
             style={{ width: 210, minWidth: 180 }}
             options={[
               { value: 'all', label: 'Članarina: svi' },
-              { value: 'liable', label: 'Aktivni (plaćaju)' },
-              { value: 'exempt', label: 'Neaktivni (oslobođeni)' },
+              { value: 'liable', label: 'Plaćaju članarinu' },
+              { value: 'exempt', label: 'Oslobođeni članarine' },
             ]}
           />
           <Search

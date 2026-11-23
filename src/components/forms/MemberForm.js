@@ -3,10 +3,11 @@
  * Image upload: shown only in form sidebar; not in list.
  */
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { Form, Input, Select, Button, Space, DatePicker, Upload, Avatar, Switch, Divider } from 'antd';
+import { Form, Input, Select, Button, Space, DatePicker, Upload, Avatar, Divider } from 'antd';
 import { PlusOutlined, UserOutlined, CameraOutlined } from '@ant-design/icons';
 import { useCities } from '../../hooks/useMembers';
 import { useCompanies } from '../../hooks/useCompanies';
+import { MEMBER_STATUS, MEMBER_STATUS_OPTIONS, statusLabels } from '../../core/constants/memberStatus';
 import CompanyCreateModal from './CompanyCreateModal';
 
 const SEX_OPTIONS = [
@@ -181,27 +182,30 @@ export default function MemberForm({
 
       <Divider orientation="left" style={{ marginTop: 8 }}>Status člana</Divider>
       <Form.Item
-        name="is_active_member"
-        label="Aktivan član"
-        valuePropName="checked"
-        initialValue={true}
-        extra="Neaktivni članovi se ne prikazuju na sajtu, ali ostaju u evidenciji."
+        name="member_status"
+        label="Status"
+        initialValue={MEMBER_STATUS.aktivan}
+        extra="Neaktivni i odbijeni se ne prikazuju na sajtu, ne zadužuju se članarinom i ne dobijaju opomene — ali ostaju u evidenciji."
       >
-        <Switch checkedChildren="Aktivan" unCheckedChildren="Neaktivan" />
+        <Select options={MEMBER_STATUS_OPTIONS} />
       </Form.Item>
-      <Form.Item noStyle shouldUpdate={(prev, curr) => prev.is_active_member !== curr.is_active_member}>
-        {({ getFieldValue }) =>
-          getFieldValue('is_active_member') === false ? (
+      <Form.Item noStyle shouldUpdate={(prev, curr) => prev.member_status !== curr.member_status}>
+        {({ getFieldValue }) => {
+          const status = getFieldValue('member_status') || MEMBER_STATUS.aktivan;
+          if (status === MEMBER_STATUS.aktivan) return null;
+          const labels = statusLabels(status);
+
+          return (
             <>
-              <Form.Item name="inactive_date" label="Datum (npr. preminuo dana)">
-                <DatePicker format="DD.MM.YYYY" placeholder="Izaberite datum" style={{ width: '100%' }} />
+              <Form.Item name="inactive_date" label={labels.datum}>
+                <DatePicker format="DD.MM.YYYY" placeholder={labels.datumPlaceholder} style={{ width: '100%' }} />
               </Form.Item>
-              <Form.Item name="inactive_reason" label="Obrazloženje">
-                <Input.TextArea rows={2} placeholder="npr. Preminuo" maxLength={512} />
+              <Form.Item name="inactive_reason" label={labels.obrazlozenje}>
+                <Input.TextArea rows={2} placeholder={labels.obrazlozenjePlaceholder} maxLength={512} />
               </Form.Item>
             </>
-          ) : null
-        }
+          );
+        }}
       </Form.Item>
 
       <Form.Item style={{ marginBottom: 0 }}>
